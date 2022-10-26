@@ -1,0 +1,15 @@
+Minesweeper game played using user input in the linux terminal.
+Program is written in x86-64 assembly language, Intel syntax.
+
+The game is played on a 9x9 board with hidden values containing either a
+bomb (#) or a digit (0-8) symbolizing the number of bombs adjacent to the cell.
+User has two options:
+f - flag a cell (mark it as a bomb)
+c - clear a cell (reveal a hidden number)
+Once either option has been selected, user must enter a line and column (1-9).
+Game is lost if a cell containing a bomb is cleared.
+Game is won if all cells containing digits have been cleared.
+
+To run the program enter the following commands in the linux terminal:
+make
+./minesweeper
