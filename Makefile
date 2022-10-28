@@ -1,6 +1,6 @@
 all: minesweeper.o minesweeper
 
-minesweeper.o: minesweeper.asm functions.asm utils.asm
+minesweeper.o: minesweeper.asm utils.asm functions.asm
 	nasm -o minesweeper.o -f elf64 minesweeper.asm
 
 minesweeper: minesweeper.o
