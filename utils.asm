@@ -1,6 +1,6 @@
 section .text
 
-%macro pusha 0  ; push registers onto the stack
+%macro pusha 0      ; push registers onto the stack
     push rax
     push rcx
     push rdx
@@ -14,7 +14,7 @@ section .text
     push r11
 %endmacro
 
-%macro popa 0   ; restore register values
+%macro popa 0       ; restore register values
     pop r11
     pop r10
     pop r9
