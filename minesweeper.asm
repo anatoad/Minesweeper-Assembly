@@ -1,4 +1,4 @@
-%include "utils.asm"
+%include "functions.asm"
 
 global _start
 
@@ -29,7 +29,8 @@ adj_len equ $-adj
 
 clear_total db 72
 bomb_value db 35
-mask db 00001111b
+mask db 1111b
+matrix_size dq 10
 
 section .data
 values times 100 db '0'

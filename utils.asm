@@ -1,263 +1,293 @@
-%include "header.asm"
-
 section .text
 
-is_valid_index:             ; check if index is within matrix bounds
+%macro pusha 0  ; push registers onto the stack
+    push rax
+    push rcx
+    push rdx
+    push rbx
+    push rsp
+    push rbp
+    push rsi
+    push rdi
+    push r9
+    push r10
+    push r11
+%endmacro
+
+%macro popa 0   ; restore register values
+    pop r11
+    pop r10
+    pop r9
+    pop rdi
+    pop rsi
+    pop rbp
+    pop rsp
+    pop rbx
+    pop rdx
+    pop rcx
+    pop rax
+%endmacro
+
+
+write:                          ; make write system call
     pusha
 
-    mov rcx, rdi            ; index to be checked
-    mov byte [buffer], 1    ; assume index is correct
+    mov rax, 1                  ; write system call number (1)
+    mov rdx, rsi                ; number of bytes to print (second argument)
+    mov rsi, rdi                ; buffer (first argument)
+    mov rdi, 1                  ; stdout file descriptor
+    syscall                     ; call kernel
 
-    cmp rcx, 11             ; check if index is on line 0 of matrix
-    jl incorrect_index
+    popa
+    ret
 
-    cmp rcx, 99             ; check if index excedes matrix lines
-    jg incorrect_index
 
-    mov rdi, rcx
-    mov rsi, 10
-    call modulo
+read:                           ; make read system call      
+    pusha
 
-    cmp al, 0               ; check if index is on column 0 of matrix
-    je incorrect_index
+    mov rax, 0                  ; read system call number (0)
+    mov rdi, 0                  ; stdin file descriptor
+    mov rsi, buffer             ; buffer (first argument)
+    mov rdx, 1                  ; bytes count (second argument)
+    syscall                     ; call kernel
 
-    jmp exit_correct_index
-
-incorrect_index:
-    mov byte [buffer], 0
-
-exit_correct_index:
     popa
     xor rax, rax
     mov al, [buffer]
     ret
 
 
-init_table:             ; initialize the table (mark digits 1-9 on the edges)
-    mov rcx, 10
-    mov rdx, 90
-    mov rsi, 39h
-
-digits:
-    mov byte [table + rcx - 1], sil
-    mov byte [table + rdx], sil
-
-    sub rdx, 10
-    dec rsi
-    loop digits
-
-    mov byte [table], 32
+exit:                           ; make exit system call
+    mov rax, 60                 ; exit system call number (60)
+    mov rdi, 0                  ; no error code
+    syscall
 
     ret
 
 
-init_bombs:              ; initialize bombs in the values matrix
-    pusha
-
-    mov rcx, 0
-bombs:
-    xor rbx, rbx
-
-    call get_random_digit   ; get random line
-    mov bl, al
-
-    pusha
-    xor rdx, rdx
-    mov al, bl
-    mov dl, 10
-    mul dl
-
-    mov [buffer], al
-    popa
-
-    xor rbx, rbx
-    mov bl, [buffer]
-
-    call get_random_digit   ; get random column
-    add bl, al
-
-    cmp byte [values + rbx], 35
-    jne next
-    jmp bombs
-
-next:
-    mov byte [values + rbx], 35
-    add rcx, 1
-    cmp rcx, 9
-    jl bombs
-
-    popa
-    ret
-
-
-init_values:        ; init values of cells adjaent to bombs
-    pusha
-
-    mov rcx, 11
-compute:
-    xor r9, r9
-    mov r9b, byte [values + rcx]
-
-    cmp r9b, byte [bomb_value]
-    jne idle
-
-    mov rdx, 0
-iterate_adj:
-    mov rbx, rcx
-    add bl, byte [adj + rdx]    ; adjacent index
-
-    xor rdi, rdi
-    mov dil, bl
-    call is_valid_index
-
-    cmp rax, 0
-    je skip
-
-    mov sil, byte [values + rbx]
-    cmp sil, byte [bomb_value]
-    je skip
-
-    inc sil
-    mov byte [values + rbx], sil
-
-skip:
-    inc rdx
-    cmp rdx, 8
-    jl iterate_adj 
-
-idle:
-    inc rcx
-    cmp rcx, 100
-    jl compute
-
-    popa
-    ret
-
-
-inc_cleared:        ; increment value of variable cleared by 1
+multiply_8bit:                  ; multiply two 8bit integers
     pusha
 
     xor rax, rax
-    mov al, byte [cleared]
-    inc al
-    mov byte [cleared], al 
+    xor rdx, rdx
+    mov al, dil                 ; first argument (first factor)
+    mul sil                     ; multiply by second argument (second factor)
+
+    mov [buffer], al
+
+    popa
+    xor rax, rax
+    mov al, [buffer]            ; return result in al
+    ret
+
+
+read_input:                     ; read from standard input (option, line and column)
+    pusha
+
+    mov rdi, msg_option
+    mov rsi, msg_option_len
+    call write                  ; print message to request option from user
+
+    call read                   ; read a character symbolizing the option selected
+    mov byte [option], al       ; by user ('f' - flag or 'c' - clear)
+    call read                   ; read line separator (and ignore it)
+
+    mov rdi, msg_line
+    mov rsi, msg_line_len
+    call write                  ; print message to request line from user
+
+    call read                   ; read a digit symbolizing the line number
+    sub al, '0'                 ; subtract '0' from the ascii code to save the index
+    mov byte [line], al         ; save line index in global variable line
+    call read                   ; read line separator
+
+    mov rdi, msg_column
+    mov rsi, msg_column_len
+    call write                  ; print message to request column from user
+
+    call read                   ; read a digit symbolizing the column number
+    sub al, '0'
+    mov byte [column], al       ; save column index in global variable column
+    call read
 
     popa
     ret
 
 
-recursive_clear:
+print_char:                     ; print a character to stdout
     pusha
 
-    mov rdx, rdi        ; start index in dl
+    mov [print_buffer], dil     ; store character in a buffer
+    mov rdi, print_buffer
+    mov rsi, 1                  ; number of bytes to print (1)
+    call write                  ; make write system call
 
-    cmp byte [table + rdx], 61
-    jne exit_recursive_clear
+    popa
+    ret
 
-continue_recursion:
-    mov r9b, byte [values + rdx]    ; current value in values
-    mov byte [table + rdx], r9b     ; clear value on table
 
-    call inc_cleared
+modulo_8bit:                    ; return remainder of division between two 8bit integers
+    pusha                       ; rdi - dividend, rsi - divisor
+
+    xor rdx, rdx
+    mov ax, di
+    div sil                     ; perform division
+
+    shr rax, 8                  ; remainder is stored in ah
+    mov [buffer], al
+
+    popa
+    xor rax, rax
+    mov al, [buffer]            ; return remainder in al
+
+    ret
+
+
+divide_8bit:                    ; return quotient of division between two 8bit integers
+    pusha                       ; rdi - dividend, rsi - divisor
     
-    xor rcx, rcx
-iterate:
-    mov rbx, rdx
-    add bl, byte [adj + rcx]         ; new index in bl
+    xor rdx, rdx
+    mov ax, di
+    div sil                     ; perform division
+    
+    mov [buffer], al            ; quotient is stored in al
 
-    mov dil, bl
-    call is_valid_index
+    popa
+    xor rax, rax
+    mov al, [buffer]            ; return remainder in al
+    ret
+
+
+print_matrix:                   ; print a given matrix to stdout
+    pusha
+
+    mov rcx, [matrix_size]      ; number of lines to print
+    mov rdx, 0                  ; index in the matrix
+    mov rax, rdi                ; the matrix address (first argument)
+
+print_lines:
+    mov rsi, 0
+
+print_columns:
+    mov dil, byte [rax + rdx]   ; print character from matrix
+    call print_char
+    inc rdx                     ; go to the next character in matrix
+
+    mov dil, 32                 ; space ASCII code
+    call print_char             ; print space character
+
+    inc rsi
+    cmp rsi, 10
+    jl print_columns
+
+    mov dil, 10                 ; newline ASCII code
+    call print_char             ; print newline character
+
+    loop print_lines
+
+    popa
+    ret
+
+
+get_random_digit:               ; return a random digit between 1-9
+    pusha
+
+    mov rax, 318                ; getrandom system call number (318)
+    mov rdi, buffer
+    mov rsi, 1                  ; bytes count
+    mov rdx, 0                  ; no flags
+    syscall
+
+    mov al, byte [buffer]       ; store the randomly generated byte in al
+
+    and al, byte [mask]         ; normalize number to be in range 1-9
+    cmp al, 9
+    jle continue
+    sub al, 9
+
+continue:
     cmp al, 0
-    je next_index
+    jg valid
+    add al, 1
 
-    mov r9b, byte [values + rbx]     ; new values
+valid:
+    mov [buffer], al
+    popa
+    mov al, [buffer]            ; return random digit in al
+    ret
 
-    mov r10b, byte [table + rbx]    ; current value in values
-    cmp r10b, 61
-    jne next_index
 
-    cmp r9b, '0'
-    jne alter
+print_int:                      ; print an integer value (32 bits)
+    pusha
 
-    xor rdi, rdi
-    mov dil, bl
-    call recursive_clear
-    jmp next_index
+    mov rdx, rdi                ; store integer in rdx
 
-alter:
-    mov byte [table + rbx], r9b     ; clear positive value on table
-    call inc_cleared
+    mov rsi, 10
+    call modulo_8bit
+    mov cl, al                  ; get the current last digit in cl
 
-next_index:
-    inc rcx
-    cmp rcx, 8
-    jl iterate
+    mov rdi, rdx
+    mov rsi, 10
+    call divide_8bit            ; divide the number by 10
 
-exit_recursive_clear:
+    cmp al, 0                   ; if quotient is zero stop
+    je continue_print_int
+
+    mov rdi, rax
+    call print_int              ; continue printing the rest of the digits
+
+continue_print_int:
+    mov dil, cl
+    add dil, '0'                ; get the ascii code of the current last digit
+    call print_char             ; print the last digit
+
     popa
     ret
 
 
-alter_table:
+print_flag_message:             ; print flag message in a specific format
     pusha
 
-    xor rbx, rbx
-    xor rcx, rcx
-    mov bl, [line]
+    mov rdi, msg_flag
+    mov rsi, msg_flag_len
+    call write
 
-    mov rdi, rbx
-    mov rsi, 10
-    call multiply
+    mov dil, [remaining_flags]
+    call print_char             ; print the number of remaining flags
 
-    mov cl, al
-    add cl, [column]        ; cl holds the index
+    mov rdi, '/'                ; / slash ASCII code
+    call print_char             ; print '/' character
 
-    mov dl, byte [values + rcx] ; dl holds the value
+    mov dil, [total_flags]
+    call print_char             ; print the number of total flags
 
-    cmp byte [option], 'f'
-    je option_flag
+    mov rdi, 10                 ; newline ASCII code
+    call print_char             ; print newline character
 
-    ;; option clear
+    popa
+    ret
 
-    cmp dl, 'f'         ; clear wrong flag 
-    je clear_flag
 
-    cmp dl, '0'
-    je zeros
+print_cleared_message:          ; print cleared message in a specific format
+    pusha
 
-    mov byte [table + rcx], dl
-    
-    call inc_cleared
+    mov rdi, msg_cleared
+    mov rsi, msg_cleared_len
+    call write
 
-    cmp dl, [bomb_value]
-    je lost_game
-
-zeros:
     xor rdi, rdi
-    mov dil, cl
-    call recursive_clear
+    mov dil, [cleared]
+    call print_int              ; print the number of cleared cells in the matrix
 
-    jmp exit_alter_table
+    mov dil, '/'
+    call print_char    
 
-clear_flag:
-    mov byte [table + rcx], dl
-    mov bl, [remaining_flags]
-    inc bl
-    mov byte [remaining_flags], bl
-    jmp exit_alter_table
+    xor rdi, rdi
+    mov dil, [clear_total]
+    call print_int
 
+    mov dil, 10
+    call print_char
 
-option_flag:
-    mov byte [table + rcx], 'f'
-    mov bl, [remaining_flags]
-    dec bl
-    mov byte [remaining_flags], bl
-    
-    jmp exit_alter_table
-
-lost_game:
-    mov byte [lost], 1
-
-exit_alter_table:
     popa
     ret
