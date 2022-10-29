@@ -52,48 +52,48 @@ remaining_flags db '9'
 section .text
 
 _start:
-    call init_table
+    call init_table                     ; initialize table values
 
     mov rdi, table
-    call print_matrix
+    call print_matrix                   ; print initial table
 
     call print_flag_message
 
-    call init_bombs
+    call init_bombs                     ; initialize bombs randomly on the table
 
-    call init_values
+    call init_values                    ; initialize values of cells adjacent to bombs
 
-    mov dil, 10
-    call print_char
+    mov dil, 10                         ; newline ASCII code
+    call print_char                     ; print newline character
 
 loop_game:
-    call read_input
+    call read_input                     ; read input from the user
 
-    call alter_table
+    call alter_table                    ; alter table based on user input
 
     mov rdi, table
-    call print_matrix
+    call print_matrix                   ; print table matrix
 
     call print_flag_message
 
     call print_cleared_message
 
-    cmp byte [lost], 1
+    cmp byte [lost], 1                  ; check if game is lost
     je lose
 
-    cmp byte [cleared], 72
+    cmp byte [cleared], 72              ; check if all cells have been cleared
     jne loop_game
 
     mov rdi, msg_win
     mov rsi, msg_win_len
-    call write
+    call write                          ; game is won
 
     jmp end_game
 
 lose:
     mov rdi, msg_lose
     mov rsi, msg_lose_len
-    call write
+    call write                          ; game is lost
 
 end_game:
     call exit
